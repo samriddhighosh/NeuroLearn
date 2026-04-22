@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import { useRouter } from "next/navigation";
+import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 
 export default function AuthPage({ onSuccess }) {
   const router = useRouter();
@@ -11,6 +12,7 @@ export default function AuthPage({ onSuccess }) {
   const [name, setName]       = useState("");
   const [error, setError]     = useState(null);
   const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const handleEmailAuth = async () => {
     setLoading(true);
@@ -24,6 +26,7 @@ export default function AuthPage({ onSuccess }) {
           id: data.user.id,
           display_name: name,
         });
+        setEmailSent(true);
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -43,6 +46,63 @@ export default function AuthPage({ onSuccess }) {
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
   };
+
+  if (emailSent) {
+    return (
+      <div className="min-h-screen bg-[#fdfcff] flex items-center justify-center px-4"
+        style={{ fontFamily: '"Avenir Next","Poppins","Segoe UI",sans-serif' }}>
+        <div className="w-full max-w-[400px] flex flex-col gap-4">
+
+          {/* main card */}
+          <div className="bg-white rounded-[24px] border border-[#e8e4f0] p-8 shadow-[0_8px_40px_rgba(40,20,80,0.08)] text-center">
+            <div className="w-14 h-14 rounded-[16px] bg-[#f0ecff] border border-[#ddd6ff] flex items-center justify-center mx-auto mb-5 text-2xl">
+              📬
+            </div>
+            <h1 className="text-[1.4rem] font-extrabold tracking-[-0.03em] text-[#1a1628] m-0 mb-2">
+              Check your inbox
+            </h1>
+            <p className="text-[14px] text-[#6e687f] m-0">
+              We sent a confirmation link to
+            </p>
+            <p className="text-[14px] font-bold text-[#1a1628] mt-1 mb-5">
+              {email}
+            </p>
+
+            {/* shadcn Alert */}
+            <Alert className="text-left border-[#ddd6ff] bg-[#f8f5ff]">
+              <AlertTitle className="text-[#6b4fcf] text-[13px] font-bold">
+                One more step
+              </AlertTitle>
+              <AlertDescription className="text-[13px] text-[#4d4766] mt-1">
+                Click the link in your email to activate your account. Check your spam folder if you don't see it within a minute.
+              </AlertDescription>
+            </Alert>
+
+            <button
+              onClick={() => { setEmailSent(false); setMode("login"); }}
+              className="w-full mt-5 py-3 rounded-[12px] bg-[#7257B1] text-white text-[14px] font-bold cursor-pointer hover:opacity-90 transition-opacity border-none"
+            >
+              Back to log in
+            </button>
+          </div>
+
+          {/* resend option */}
+          <p className="text-center text-[13px] text-[#9490a8]">
+            Didn't get it?{" "}
+            <button
+              onClick={async () => {
+                await supabase.auth.resend({ type: "signup", email });
+                alert("Resent! Check your inbox.");
+              }}
+              className="text-[#7b61d9] font-bold bg-transparent border-none cursor-pointer p-0"
+            >
+              Resend email
+            </button>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#fdfcff] flex items-center justify-center px-4"
