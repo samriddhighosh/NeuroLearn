@@ -94,19 +94,38 @@ function HeroBanner({ course }) {
 export default function DashboardPage({ onNavigate }) {
   const router = useRouter();
   const [user, setUser]       = useState(null);
-  const [courses, setCourses] = useState(STARTER_COURSES); // fallback to static
+  const [courses, setCourses] = useState(STARTER_COURSES); 
+  const [profile, setProfile] = useState<any>(null);
 
-    useEffect(() => {
-    // check session
+  useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) router.push("/auth");
-      else setUser(data.session.user);
-    });
+      if (!data.session) { router.push("/auth"); return; }
+      const u = data.session.user;
+      setUser(u);
 
-    // fetch live courses
-    supabase.from("courses").select("*").order("id").limit(4)
+      supabase.from("courses").select("*").order("id").limit(4)
       .then(({ data }) => { if (data?.length) setCourses(data); });
+
+      supabase
+        .from("profiles")
+        .select("display_name, xp, tier")
+        .eq("id", u.id)
+        .single()
+        .then(({ data: p }) => setProfile(p));
+    });
   }, []);
+
+  //   useEffect(() => {
+  //   // check session
+  //   supabase.auth.getSession().then(({ data }) => {
+  //     if (!data.session) router.push("/auth");
+  //     else setUser(data.session.user);
+  //   });
+
+  //   // fetch live courses
+  //   supabase.from("courses").select("*").order("id").limit(4)
+  //     .then(({ data }) => { if (data?.length) setCourses(data); });
+  // }, []);
 
   // show nothing while checking auth
   if (!user) return null;
@@ -124,7 +143,11 @@ export default function DashboardPage({ onNavigate }) {
         {/* header */}
         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <h2 className="text-[1.35rem] font-extrabold tracking-[-0.03em] m-0">
-            Hi, <span className="text-[#7b61d9]">Alex</span>!
+            Hi, <span className="text-[#7b61d9]">
+    {profile?.display_name?.split(" ")[0]        // email/password signup name
+      ?? user?.user_metadata?.full_name?.split(" ")[0]  // Google name
+      ?? "there"}                                 // fallback
+  </span>!
           </h2>
           <StatPills />
         </div>
