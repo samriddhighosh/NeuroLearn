@@ -93,7 +93,7 @@ function HeroBanner({ course }) {
 
 export default function DashboardPage({ onNavigate }) {
   const router = useRouter();
-  const [user, setUser]       = useState(null);
+  const [user, setUser]= useState<any>(null);
   const [courses, setCourses] = useState(STARTER_COURSES); 
   const [profile, setProfile] = useState<any>(null);
 
@@ -146,7 +146,7 @@ export default function DashboardPage({ onNavigate }) {
             Hi, <span className="text-[#7b61d9]">
     {profile?.display_name?.split(" ")[0]        // email/password signup name
       ?? user?.user_metadata?.full_name?.split(" ")[0]  // Google name
-      ?? "there"}                                 // fallback
+      ?? "there"}                                 
   </span>!
           </h2>
           <StatPills />
