@@ -1,8 +1,10 @@
 "use client";
 import React, { useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { useRouter } from "next/navigation";
 
 export default function AuthPage({ onSuccess }) {
+  const router = useRouter();
   const [mode, setMode]       = useState("login");   // "login" | "signup"
   const [email, setEmail]     = useState("");
   const [password, setPassword] = useState("");
@@ -27,6 +29,7 @@ export default function AuthPage({ onSuccess }) {
         if (error) throw error;
       }
       onSuccess?.();
+      router.push("/");
     } catch (e) {
       setError(e.message);
     } finally {
