@@ -4,24 +4,78 @@ import { supabase } from "../../lib/supabase";
 import { Icon, TopNav, StatPills, CourseCard } from "../components/Shared";
 import { useRouter } from "next/navigation";
 
-const STARTER_COURSES = [
-  { id: 1, slug: "neural-networks",       title: "Neural Networks",       topic: "How the brain wires itself",   category: "Neuroscience", icon: "network", progress: 75, xp: 240, lessons: 12, streak: true },
-  { id: 2, slug: "synaptic-transmission", title: "Synaptic Transmission", topic: "Signals across the gap",       category: "Biology",      icon: "pulse",   progress: 40, xp: 180, lessons: 9  },
-  { id: 3, slug: "brain-plasticity",      title: "Brain Plasticity",      topic: "How learning rewires neurons", category: "Neuroscience", icon: "dna",     progress: 0,  xp: 280, lessons: 14 },
-  { id: 4, slug: "neuro-engineering",     title: "Neuro-engineering",     topic: "Brain-computer interfaces",    category: "Engineering",  icon: "chip",    progress: 0,  xp: 360, lessons: 18 },
-];
+// const STARTER_COURSES = [
+//   { id: 1, slug: "neural-networks",       title: "Neural Networks",       topic: "How the brain wires itself",   category: "Neuroscience", icon: "network", progress: 75, xp: 240, lessons: 12, streak: true },
+//   { id: 2, slug: "synaptic-transmission", title: "Synaptic Transmission", topic: "Signals across the gap",       category: "Biology",      icon: "pulse",   progress: 40, xp: 180, lessons: 9  },
+//   { id: 3, slug: "brain-plasticity",      title: "Brain Plasticity",      topic: "How learning rewires neurons", category: "Neuroscience", icon: "dna",     progress: 0,  xp: 280, lessons: 14 },
+//   { id: 4, slug: "neuro-engineering",     title: "Neuro-engineering",     topic: "Brain-computer interfaces",    category: "Engineering",  icon: "chip",    progress: 0,  xp: 360, lessons: 18 },
+// ];
 
-const PATHWAY_LESSONS = [
-  { title: "Neural Networks",       topic: "Foundations",        done: true  },
-  { title: "Synaptic Transmission", topic: "Signal propagation", done: true  },
-  { title: "Brain Plasticity",      topic: "Learning & memory",  done: true  },
-  { title: "Neuro-engineering",     topic: "BCI interfaces",     done: true  },
-  { title: "Neuro-economics",       topic: "Decision & reward",  done: false, active: true },
-];
+// const PATHWAY_LESSONS = [
+//   { title: "Neural Networks",       topic: "Foundations",        done: true  },
+//   { title: "Synaptic Transmission", topic: "Signal propagation", done: true  },
+//   { title: "Brain Plasticity",      topic: "Learning & memory",  done: true  },
+//   { title: "Neuro-engineering",     topic: "BCI interfaces",     done: true  },
+//   { title: "Neuro-economics",       topic: "Decision & reward",  done: false, active: true },
+// ];
 
 const ICONS_LIST = ["network", "pulse", "dna", "chip", "bars"];
 
-function PathwaySidebar() {
+function PathwaySidebar({ userId }: { userId: string }) {
+  const [lessons, setLessons] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+  supabase
+      .from("modules")
+      .select(`
+        id, title, slug, icon, position,
+        lessons (
+          id,
+          subsections ( id )
+        )
+      `)
+      .order("id")
+      .limit(5)
+      .then(async ({ data: modules }) => {
+        if (!modules) return;
+
+        // get all completed subsection IDs for this user
+        const { data: progress } = await supabase
+          .from("user_progress")
+          .select("subsection_id")
+          .eq("user_id", userId)
+          .eq("completed", true);
+
+        const completedIds = new Set(progress?.map((p: any) => p.subsection_id) ?? []);
+
+        const shaped = modules.map((m: any, i: number) => {
+          const allSubs = m.lessons?.flatMap((l: any) => l.subsections ?? []) ?? [];
+          const totalSubs = allSubs.length;
+          const doneSubs = allSubs.filter((s: any) => completedIds.has(s.id)).length;
+          const done = totalSubs > 0 && doneSubs === totalSubs;
+          const active = !done && doneSubs > 0;
+
+          return {
+            title: m.title,
+            topic: m.slug.replace(/-/g, " "),
+            icon: m.icon ?? ICONS_LIST[i] ?? "dna",
+            done,
+            active,
+          };
+        });
+
+        // mark first incomplete as active if none are in progress
+        const anyActive = shaped.some((s: any) => s.active);
+        if (!anyActive) {
+          const firstIncomplete = shaped.find((s: any) => !s.done);
+          if (firstIncomplete) firstIncomplete.active = true;
+        }
+
+        setLessons(shaped);
+      });
+  }, [userId]);
   return (
     <div className="w-[280px] flex-shrink-0 bg-[#faf9fc] border border-[#e8e4f0] rounded-[18px] py-0 overflow-hidden">
       <div className="px-4 py-3.5 border-b border-[#e8e4f0]">
@@ -30,7 +84,7 @@ function PathwaySidebar() {
         </span>
       </div>
       <div className="flex flex-col gap-0 py-1">
-        {PATHWAY_LESSONS.map((l, i) => (
+        {lessons.map((l, i) => (
           <div key={i} className={[
             "flex items-center gap-3 px-4 py-2.5 border-l-[3px] transition-colors",
             l.active ? "bg-[rgba(123,97,217,0.06)] border-[#7b61d9]" : "border-transparent",
@@ -60,17 +114,25 @@ function PathwaySidebar() {
   );
 }
 
-function HeroBanner({ course }) {
+function HeroBanner({ course, completedCount, totalCount, profile }: {
+  course: any;
+  completedCount: number;
+  totalCount: number;
+  profile: any;
+}) {
+  const dots = Math.min(totalCount, 7) || 7;
+  const doneDots = Math.min(completedCount, dots);
+
   return (
     <div className="flex-1 relative overflow-hidden rounded-[18px] border-[1.5px] border-[rgba(34,25,60,0.14)] bg-[#f8f5ff] px-8 py-10">
       <div className="absolute -top-8 -left-5 w-40 h-40 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(255,215,149,0.22), transparent 65%)" }} />
       <span className="relative text-[10px] font-bold uppercase tracking-[0.08em] bg-[#222] text-white px-2 py-1 rounded-md">
-        Song O
+        {profile?.tier ?? "Bronze"}
       </span>
       <h3 className="relative text-[1.8rem] font-extrabold tracking-[-0.02em] mt-3.5 mb-1 text-[#191919] leading-[1.2] max-w-[22ch]">
-        Continue with {course.title}
+        Continue with {course?.title ?? "your course"}
       </h3>
-      <p className="relative text-[14px] text-[#6e687f] m-0">Goal: 45 mins</p>
+      <p className="relative text-[14px] text-[#6e687f] m-0"> {profile?.xp > 0 ? `${profile.xp} XP earned` : "Goal: complete your first lesson"}</p>
 
       {/* progress dots */}
       <div className="flex flex-wrap gap-2.5 mt-5 relative">
@@ -78,9 +140,9 @@ function HeroBanner({ course }) {
           <div key={i} className={[
             "w-9 h-9 rounded-full flex items-center justify-center border-[1.5px]",
             "shadow-[0_4px_10px_rgba(33,29,44,0.08)]",
-            i < 3 ? "bg-[#7257B1] border-[#7257B1]" : "bg-white border-[#e8e4f0]",
+            i < doneDots ? "bg-[#7257B1] border-[#7257B1]" : "bg-white border-[#e8e4f0]",  // ← fix
           ].join(" ")}>
-            {i < 3
+            {i < doneDots
               ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><path d="M5 12l5 5 9-9"/></svg>
               : <Icon type="dna" size={15} color="#a5a0b7" />
             }
@@ -91,11 +153,14 @@ function HeroBanner({ course }) {
   );
 }
 
-export default function DashboardPage({ onNavigate }) {
+export default function DashboardPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const router = useRouter();
-  const [user, setUser]= useState<any>(null);
-  const [courses, setCourses] = useState(STARTER_COURSES); 
+  const [user, setUser]       = useState<any>(null);
+  const [courses, setCourses] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [totalCount, setTotalCount]         = useState(7);
+
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -103,37 +168,64 @@ export default function DashboardPage({ onNavigate }) {
       const u = data.session.user;
       setUser(u);
 
-      supabase.from("courses").select("*").order("id").limit(4)
-      .then(({ data }) => { if (data?.length) setCourses(data); });
+      // live courses
+      supabase.from("courses")
+      .select(`
+        *,
+        modules ( lessons ( subsections ( id ) ) )
+      `)
+      .order("id").limit(4)
+      .then(async ({ data: rawCourses }) => {
+        if (!rawCourses?.length) return;
 
-      supabase
-        .from("profiles")
-        .select("display_name, xp, tier")
-        .eq("id", u.id)
-        .single()
+        const { data: progressData } = await supabase
+          .from("user_progress")
+          .select("subsection_id")
+          .eq("user_id", u.id)
+          .eq("completed", true);
+
+        const completedIds = new Set(progressData?.map((p: any) => p.subsection_id) ?? []);
+
+        const withProgress = rawCourses.map((c: any, i: number) => {
+          const allSubs = c.modules?.flatMap((m: any) =>
+            m.lessons?.flatMap((l: any) => l.subsections ?? []) ?? []
+          ) ?? [];
+          const total = allSubs.length;
+          const done  = allSubs.filter((s: any) => completedIds.has(s.id)).length;
+          const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
+          return { ...c, progress: pct };  // attach real progress
+        });
+
+        // unlock logic: first course always open, each next unlocks when previous is 100%
+        const withLocked = withProgress.map((c: any, i: number) => ({
+          ...c,
+          locked: i > 0 && withProgress[i - 1].progress < 100,
+        }));
+
+        setCourses(withLocked);
+      });
+
+      // live profile
+      supabase.from("profiles").select("display_name, xp, tier, streak")
+        .eq("id", u.id).single()
         .then(({ data: p }) => setProfile(p));
+
+      // live progress counts for hero dots
+      supabase.from("user_progress").select("id", { count: "exact" })
+        .eq("user_id", u.id).eq("completed", true)
+        .then(({ count }) => setCompletedCount(count ?? 0));
+
+      supabase.from("subsections").select("id", { count: "exact" })
+        .then(({ count }) => setTotalCount(Math.min(count ?? 7, 7)));
     });
   }, []);
 
-  //   useEffect(() => {
-  //   // check session
-  //   supabase.auth.getSession().then(({ data }) => {
-  //     if (!data.session) router.push("/auth");
-  //     else setUser(data.session.user);
-  //   });
-
-  //   // fetch live courses
-  //   supabase.from("courses").select("*").order("id").limit(4)
-  //     .then(({ data }) => { if (data?.length) setCourses(data); });
-  // }, []);
-
-  // show nothing while checking auth
   if (!user) return null;
 
-  const activeCourse = courses[0];
 
   return (
-    <div className="bg-white min-h-screen text-[#191919]" style={{ fontFamily: '"Avenir Next","Poppins","Segoe UI",sans-serif' }}>
+    <div className="bg-white min-h-screen text-[#191919]"
+      style={{ fontFamily: '"Avenir Next","Poppins","Segoe UI",sans-serif' }}>
       <style>{`* { box-sizing: border-box; }`}</style>
 
       <TopNav activeTab="dashboard" onNavigate={onNavigate} />
@@ -144,17 +236,22 @@ export default function DashboardPage({ onNavigate }) {
         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <h2 className="text-[1.35rem] font-extrabold tracking-[-0.03em] m-0">
             Hi, <span className="text-[#7b61d9]">
-    {profile?.display_name?.split(" ")[0]        // email/password signup name
-      ?? user?.user_metadata?.full_name?.split(" ")[0]  // Google name
-      ?? "there"}                                 
-  </span>!
+              {profile?.display_name?.split(" ")[0]
+                ?? user?.user_metadata?.full_name?.split(" ")[0]
+                ?? "there"}
+            </span>!
           </h2>
           <StatPills />
         </div>
 
         {/* hero + stripe */}
         <div className="grid gap-3.5 mb-12" style={{ gridTemplateColumns: "1fr 110px" }}>
-          <HeroBanner course={activeCourse} />
+          <HeroBanner
+            course={courses[0]}
+            completedCount={completedCount}
+            totalCount={totalCount}
+            profile={profile}
+          />
           <div className="relative rounded-[18px] bg-[#ffdca8] overflow-hidden min-h-[120px]">
             {[22, 52, 82].map(top => (
               <span key={top} className="absolute -left-2 h-2.5 w-9 rounded-full bg-white border border-[rgba(40,35,60,0.28)]" style={{ top }} />
@@ -165,11 +262,16 @@ export default function DashboardPage({ onNavigate }) {
         {/* courses + pathway */}
         <div className="grid gap-5 items-start" style={{ gridTemplateColumns: "1fr 280px" }}>
           <div className="grid grid-cols-2 gap-6">
-            {courses.map(c => (
-              <CourseCard key={c.id} course={c} onNavigate={() => onNavigate?.("courses")} />
-            ))}
+            {courses.length === 0
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="rounded-[18px] border border-[#e8e4f0] p-5 h-[200px] animate-pulse bg-[#faf9fc]" />
+                ))
+              : courses.map(c => (
+                  <CourseCard key={c.id} course={c} onNavigate={() => onNavigate?.("courses")} />
+                ))
+            }
           </div>
-          <PathwaySidebar />
+          <PathwaySidebar userId={user?.id} />
         </div>
 
       </div>

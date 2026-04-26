@@ -7,6 +7,7 @@ import { useAuth } from "../../../../lib/useAuth";
 import { useProfile } from "../../../../lib/useProfile";
 import { supabase } from "../../../../lib/supabase";
 
+
 const NODES = [
   { id: "neurobiology",            label: "Neurobiology",             x: 9,  y: 22, state: "done",  icon: "dna",     slug: "synaptic-transmission" },
   { id: "neuropsychology",         label: "Neuropsychology",          x: 30, y: 38, state: "done",  icon: "head",    slug: "neuropsychology" },
@@ -258,22 +259,49 @@ export default function LessonPage({ onNavigate }) {
   const { user } = useAuth();
   const { awardXP } = useProfile();
   const params = useParams();
-  const slug = params?.slug;
-
-  const courseNode = useMemo(() => NODES.find(n => n.slug === slug), [slug]);
+  const router = useRouter();
+  const slug = params?.slug as string;
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  const [lessons, setLessons] = useState(() => {
-    if (!courseNode) return null;
-    return buildLessons({ title: courseNode.label, slug: courseNode.slug, progress: 10 });
-  });
+  const [courseNode, setCourseNode]   = useState<any>(null);
+  const [lessons, setLessons]         = useState<any>(null);
+  const [loading, setLoading]         = useState(true);
+  const [courseDbId, setCourseDbId]   = useState<number | null>(null);
 
   useEffect(() => {
-    if (courseNode) {
-      setLessons(buildLessons({ title: courseNode.label, slug: courseNode.slug, progress: 10 }));
+  if (!slug) return;
+
+  async function load() {
+    // 1. find course by slug directly
+    const { data: course } = await supabase
+      .from("courses")
+      .select("id, slug, title, icon, lesson_count")
+      .eq("slug", slug)
+      .single();
+
+    if (course) {
+      setCourseNode(course);
+      setCourseDbId(course.id);
     }
-  }, [courseNode]);
+
+    // 2. fetch lessons from Supabase
+    const { fetchLessons } = await import("../../../../lib/lessons");
+    const data = await fetchLessons(slug);
+
+    setLessons(data ?? buildLessons({
+      title:    course?.title ?? slug,
+      slug,
+      progress: 0,
+    }));
+
+    setLoading(false);
+  }
+
+  load().catch(err => {
+    console.error("LessonPage load error:", err); // ← this will tell us exactly what's failing
+    setLoading(false);
+  });
+}, [slug]);
 
   const flatOrder = useMemo(() => {
     if (!Array.isArray(lessons)) return [];
@@ -293,21 +321,32 @@ export default function LessonPage({ onNavigate }) {
   // setCourseDbId(courseData?.id);
 
   const selectedLesson = useMemo(() => {
-  if (!Array.isArray(lessons)) return undefined;
-  for (const l of lessons) {
-    const sub = l.subsections.find(s => s.selected);
-    if (sub) return {
-      lessonTitle:      l.title,
-      subsectionId:     sub.id,
-      subsectionTitle:  sub.title,
-      body:             sub.body,
-      courseId:         courseNode?.dbId,  // add dbId when fetching
-    };
-  }
-  return undefined;
-}, [lessons, courseNode]);
+    if (!Array.isArray(lessons)) return undefined;
+    for (const l of lessons) {
+      const sub = l.subsections.find((s: any) => s.selected);
+      if (sub) return {
+        lessonTitle:     l.title,
+        subsectionId:    sub.id,
+        subsectionTitle: sub.title,
+        body:            sub.body,
+        courseId:        courseDbId,  // ✅ now comes from Supabase
+      };
+    }
+    return undefined;
+  }, [lessons, courseDbId]);
 
-  const course = { title: courseNode.label, progress: 10 };
+  if (loading || !courseNode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-[#9490a8]">
+        Loading…
+      </div>
+    );
+  }
+
+  const course = { 
+    title:    courseNode.title ?? slug, 
+    progress: 10 
+  };
 
   const handleToggle = id =>
     setLessons(prev => prev.map(l => l.id === id ? { ...l, expanded: !l.expanded } : l));
@@ -336,7 +375,7 @@ export default function LessonPage({ onNavigate }) {
       user.id,
       cur.subsectionId,
       cur.lessonId,
-      courseData.id
+      courseData?.id
     );
     awardXP(result); 
   }
@@ -374,7 +413,8 @@ export default function LessonPage({ onNavigate }) {
 
           {/* ✅ Use onNavigate instead of undefined onBack */}
           <button
-            onClick={() => onNavigate?.("pathways/neuroscience")}
+            
+                  onClick={() => router.back()}
             className="flex items-center gap-2 bg-transparent border-none cursor-pointer text-[#4d4766] text-[14px] font-bold py-1.5 flex-shrink-0"
           >
             <Icon type="chevL" size={16} color="#4d4766" /> All courses

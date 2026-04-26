@@ -127,9 +127,9 @@ export function StatPills() {
    COURSE CARD  — NO hover popup (popup only on pathway)
 ════════════════════════════════════════════════════════ */
 export function CourseCard({ course, onNavigate }) {
-  const [saved, setSaved] = React.useState(false);
-  const started = course.progress > 0;
-  const locked  = !started && course.id > 2;
+ const [saved, setSaved] = React.useState(false);
+  const started = (course.progress ?? 0) > 0;
+  const locked  = course.locked ?? false; 
 
   return (
     <div
@@ -177,11 +177,9 @@ export function CourseCard({ course, onNavigate }) {
       </div>
 
       {/* progress */}
-      <div>
-        <p className="text-[12px] text-[#6e687f] mb-1.5 m-0">Course {course.progress}% complete</p>
-        <div className="h-[5px] bg-[#e9e7e8] rounded-full overflow-hidden">
-          <div className="h-full bg-[#7257B1] rounded-full" style={{ width: `${course.progress}%` }} />
-        </div>
+      <p className="text-[12px] text-[#6e687f] mb-1.5 m-0">Course {course.progress ?? 0}% complete</p>
+      <div className="h-[5px] bg-[#e9e7e8] rounded-full overflow-hidden">
+        <div className="h-full bg-[#7257B1] rounded-full" style={{ width: `${course.progress ?? 0}%` }} />
       </div>
 
       {/* CTA */}
